@@ -20,6 +20,11 @@ use App\Http\Controllers\EventReportController;
 |
 */
 
+// Health check route for Railway
+Route::get('/up', function () {
+    return response()->json(['status' => 'ok', 'timestamp' => now()]);
+});
+
 // Trang chủ
 Route::get('/', function () {
     return redirect()->route('dashboard');
