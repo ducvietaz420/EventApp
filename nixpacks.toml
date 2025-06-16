@@ -4,7 +4,7 @@ nixPkgs = ['php81', 'php81Packages.composer', 'nodejs-18_x', 'npm-9_x']
 [phases.install]
 cmds = [
     'composer install --no-dev --optimize-autoloader',
-    'npm ci',
+    'npm install',
     'npm run build'
 ]
 
