@@ -19,6 +19,13 @@ class DatabaseSeeder extends Seeder
         //     'email' => 'test@example.com',
         // ]);
         
+        // Tạo permissions và roles trước
+        $this->call(PermissionSeeder::class);
+        $this->call(RoleSeeder::class);
+        
+        // Tạo tài khoản admin trước
+        $this->call(AdminUserSeeder::class);
+        
         // Chạy EventSeeder để tạo dữ liệu mẫu cho hệ thống quản lý sự kiện
         $this->call(EventSeeder::class);
     }

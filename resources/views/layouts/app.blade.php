@@ -64,6 +64,17 @@
         .status-in-progress { background-color: #fff3e0; color: #f57c00; }
         .status-completed { background-color: #e8f5e8; color: #388e3c; }
         .status-cancelled { background-color: #ffebee; color: #d32f2f; }
+        .avatar-circle {
+            width: 35px;
+            height: 35px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 14px;
+        }
     </style>
     @stack('styles')
 </head>
@@ -84,48 +95,91 @@
                                 Dashboard
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link {{ request()->routeIs('events.*') ? 'active' : '' }}" href="{{ route('events.index') }}">
-                                <i class="fas fa-calendar-alt me-2"></i>
-                                Sự kiện
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {{ request()->routeIs('budgets.*') ? 'active' : '' }}" href="{{ route('budgets.index') }}">
-                                <i class="fas fa-dollar-sign me-2"></i>
-                                Ngân sách
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {{ request()->routeIs('timelines.*') ? 'active' : '' }}" href="{{ route('timelines.index') }}">
-                                <i class="fas fa-clock me-2"></i>
-                                Lịch trình
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {{ request()->routeIs('suppliers.*') ? 'active' : '' }}" href="{{ route('suppliers.index') }}">
-                                <i class="fas fa-truck me-2"></i>
-                                Nhà cung cấp
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {{ request()->routeIs('checklists.*') ? 'active' : '' }}" href="{{ route('checklists.index') }}">
-                                <i class="fas fa-check-square me-2"></i>
-                                Danh sách công việc
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {{ request()->routeIs('ai-suggestions.*') ? 'active' : '' }}" href="{{ route('ai-suggestions.index') }}">
-                                <i class="fas fa-robot me-2"></i>
-                                Gợi ý AI
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {{ request()->routeIs('event-reports.*') ? 'active' : '' }}" href="{{ route('event-reports.index') }}">
-                                <i class="fas fa-chart-bar me-2"></i>
-                                Báo cáo
-                            </a>
-                        </li>
+                        @auth
+                            @if(auth()->user()->hasPermission('events.view'))
+                                <li class="nav-item">
+                                    <a class="nav-link {{ request()->routeIs('events.*') ? 'active' : '' }}" href="{{ route('events.index') }}">
+                                        <i class="fas fa-calendar-alt me-2"></i>
+                                        Sự kiện
+                                    </a>
+                                </li>
+                            @endif
+                            
+                            @if(auth()->user()->hasPermission('checklists.view'))
+                                <li class="nav-item">
+                                    <a class="nav-link {{ request()->routeIs('checklists.*') ? 'active' : '' }}" href="{{ route('checklists.index') }}">
+                                        <i class="fas fa-check-square me-2"></i>
+                                        Danh sách công việc
+                                    </a>
+                                </li>
+                            @endif
+                            
+                            @if(auth()->user()->hasPermission('ai_suggestions.view'))
+                                <li class="nav-item">
+                                    <a class="nav-link {{ request()->routeIs('ai-suggestions.*') ? 'active' : '' }}" href="{{ route('ai-suggestions.index') }}">
+                                        <i class="fas fa-robot me-2"></i>
+                                        Gợi ý AI
+                                    </a>
+                                </li>
+                            @endif
+                            
+                            @if(auth()->user()->hasPermission('users.view'))
+                                <li class="nav-item">
+                                    <a class="nav-link {{ request()->routeIs('users.*') ? 'active' : '' }}" href="{{ route('users.index') }}">
+                                        <i class="fas fa-users me-2"></i>
+                                        Quản lý người dùng
+                                    </a>
+                                </li>
+                            @endif
+                            
+                            @if(auth()->user()->hasPermission('activity_logs.view_all'))
+                                <li class="nav-item">
+                                    <a class="nav-link {{ request()->routeIs('activity-logs.*') ? 'active' : '' }}" href="{{ route('activity-logs.index') }}">
+                                        <i class="fas fa-history me-2"></i>
+                                        Lịch sử hoạt động
+                                    </a>
+                                </li>
+                            @endif
+                        @endauth
+                    </ul>
+                    
+                    <!-- User Menu -->
+                    @auth
+                        <hr class="text-white">
+                        <div class="dropdown">
+                            <button class="btn btn-link nav-link dropdown-toggle text-white text-decoration-none w-100 text-start" 
+                                    type="button" 
+                                    id="userDropdown" 
+                                    data-bs-toggle="dropdown" 
+                                    aria-expanded="false">
+                                <div class="d-flex align-items-center">
+                                    <div class="avatar-circle me-2">
+                                        <i class="fas fa-user"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <div class="fw-semibold">{{ auth()->user()->name }}</div>
+                                        <small class="opacity-75">{{ auth()->user()->role_display }}</small>
+                                    </div>
+                                </div>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="userDropdown">
+                                <li>
+                                    <a class="dropdown-item" href="#">
+                                        <i class="fas fa-user me-2"></i>Thông tin cá nhân
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <form method="POST" action="{{ route('logout') }}" class="d-inline">
+                                        @csrf
+                                        <button type="submit" class="dropdown-item text-danger">
+                                            <i class="fas fa-sign-out-alt me-2"></i>Đăng xuất
+                                        </button>
+                                    </form>
+                                </li>
+                            </ul>
+                        </div>
+                    @endauth
                     </ul>
                 </div>
             </nav>

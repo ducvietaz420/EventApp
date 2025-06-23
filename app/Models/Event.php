@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
@@ -13,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  */
 class Event extends Model
 {
-    use HasFactory;
+    use HasFactory, LogsActivity;
 
     /**
      * Các trường có thể được gán giá trị hàng loạt
@@ -46,8 +47,6 @@ class Event extends Model
      */
     protected $casts = [
         'event_date' => 'date',
-        'start_time' => 'time',
-        'end_time' => 'time',
         'expected_guests' => 'integer',
         'budget' => 'decimal:2',
         'actual_cost' => 'decimal:2',
@@ -60,21 +59,12 @@ class Event extends Model
     ];
 
     /**
-     * Quan hệ với bảng budgets
-     * Một sự kiện có nhiều khoản ngân sách
+     * Quan hệ với bảng event_images
+     * Một sự kiện có nhiều ảnh
      */
-    public function budgets(): HasMany
+    public function images(): HasMany
     {
-        return $this->hasMany(Budget::class);
-    }
-
-    /**
-     * Quan hệ với bảng timelines
-     * Một sự kiện có nhiều mốc thời gian
-     */
-    public function timelines(): HasMany
-    {
-        return $this->hasMany(Timeline::class);
+        return $this->hasMany(EventImage::class);
     }
 
     /**
@@ -95,18 +85,11 @@ class Event extends Model
         return $this->hasMany(AiSuggestion::class);
     }
 
-    /**
-     * Quan hệ với bảng event_reports
-     * Một sự kiện có nhiều báo cáo
-     */
-    public function reports(): HasMany
-    {
-        return $this->hasMany(EventReport::class);
-    }
+
 
     /**
-     * Quan hệ nhiều-nhiều với bảng suppliers
-     * Một sự kiện có thể có nhiều nhà cung cấp
+     * Quan hệ với bảng suppliers
+     * Một sự kiện có nhiều nhà cung cấp (many-to-many)
      */
     public function suppliers(): BelongsToMany
     {
@@ -115,31 +98,46 @@ class Event extends Model
                     ->withTimestamps();
     }
 
+
+
     /**
-     * Tính tổng ngân sách đã chi tiêu
+     * Lấy ảnh nghiệm thu
      */
-    public function getTotalSpentAttribute(): float
+    public function nghiemThuImages(): HasMany
     {
-        return $this->budgets()->sum('actual_cost') ?? 0;
+        return $this->images()->nghiemThu();
     }
 
     /**
-     * Tính phần trăm ngân sách đã sử dụng
+     * Lấy ảnh thiết kế
      */
-    public function getBudgetUsagePercentageAttribute(): float
+    public function thietKeImages(): HasMany
     {
-        if (!$this->budget || $this->budget == 0) {
-            return 0;
-        }
-        return ($this->total_spent / $this->budget) * 100;
+        return $this->images()->thietKe();
     }
 
     /**
-     * Kiểm tra xem sự kiện có vượt ngân sách không
+     * Tính tổng số ảnh
      */
-    public function isOverBudget(): bool
+    public function getTotalImagesAttribute(): int
     {
-        return $this->total_spent > $this->budget;
+        return $this->images()->count();
+    }
+
+    /**
+     * Tính tổng số ảnh nghiệm thu
+     */
+    public function getTotalNghiemThuImagesAttribute(): int
+    {
+        return $this->nghiemThuImages()->count();
+    }
+
+    /**
+     * Tính tổng số ảnh thiết kế
+     */
+    public function getTotalThietKeImagesAttribute(): int
+    {
+        return $this->thietKeImages()->count();
     }
 
     /**
@@ -257,21 +255,7 @@ class Event extends Model
         };
     }
 
-    /**
-     * Lấy tổng số nhà cung cấp
-     */
-    public function getTotalSuppliersAttribute(): int
-    {
-        return $this->suppliers()->count();
-    }
 
-    /**
-     * Lấy tổng giá trị hợp đồng với nhà cung cấp
-     */
-    public function getTotalSupplierValueAttribute(): float
-    {
-        return $this->suppliers()->sum('event_supplier.contract_value') ?? 0;
-    }
 
     /**
      * Scope để lọc theo trạng thái

@@ -4,9 +4,13 @@
 @section('page-title', 'Quản lý sự kiện')
 
 @section('page-actions')
-    <a href="{{ route('events.create') }}" class="btn btn-primary">
-        <i class="fas fa-plus me-2"></i>Tạo sự kiện mới
-    </a>
+    @auth
+        @if(auth()->user()->hasPermission('events.create'))
+            <a href="{{ route('events.create') }}" class="btn btn-primary">
+                <i class="fas fa-plus me-2"></i>Tạo sự kiện mới
+            </a>
+        @endif
+    @endauth
 @endsection
 
 @section('content')
@@ -77,7 +81,6 @@
                                 <th>Ngày diễn ra</th>
                                 <th>Địa điểm</th>
                                 <th>Trạng thái</th>
-                                <th>Ngân sách</th>
                                 <th>Tiến độ</th>
                                 <th class="text-center">Thao tác</th>
                             </tr>
@@ -145,22 +148,7 @@
                                             </select>
                                         </form>
                                     </td>
-                                    <td>
-                                        @if($event->budgets && $event->budgets->count() > 0)
-                                            @php
-                                                $totalBudget = $event->budgets->sum('estimated_cost');
-                                                $totalSpent = $event->budgets->sum('actual_cost');
-                                            @endphp
-                                            <div>
-                                                <strong>{{ number_format($totalBudget, 0, ',', '.') }} VNĐ</strong><br>
-                                                <small class="text-muted">
-                                                    Đã chi: {{ number_format($totalSpent, 0, ',', '.') }} VNĐ
-                                                </small>
-                                            </div>
-                                        @else
-                                            <span class="text-muted">Chưa có ngân sách</span>
-                                        @endif
-                                    </td>
+                                   
                                     <td>
                                         @if($event->checklists && $event->checklists->count() > 0)
                                             @php
@@ -180,18 +168,28 @@
                                     </td>
                                     <td class="text-center">
                                         <div class="btn-group" role="group">
-                                            <a href="{{ route('events.show', $event->id) }}" class="btn btn-sm btn-outline-primary"
-                                                title="Xem chi tiết">
-                                                <i class="fas fa-eye"></i>
-                                            </a>
-                                            <a href="{{ route('events.edit', $event->id) }}" class="btn btn-sm btn-outline-warning"
-                                                title="Chỉnh sửa">
-                                                <i class="fas fa-edit"></i>
-                                            </a>
-                                            <button type="button" class="btn btn-sm btn-outline-danger" title="Xóa"
-                                                onclick="deleteEvent({{ $event->id }}, '{{ $event->name }}')">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
+                                            @auth
+                                                @if(auth()->user()->hasPermission('events.view'))
+                                                    <a href="{{ route('events.show', $event->id) }}" class="btn btn-sm btn-outline-primary"
+                                                        title="Xem chi tiết">
+                                                        <i class="fas fa-eye"></i>
+                                                    </a>
+                                                @endif
+                                                
+                                                @if(auth()->user()->hasPermission('events.edit'))
+                                                    <a href="{{ route('events.edit', $event->id) }}" class="btn btn-sm btn-outline-warning"
+                                                        title="Chỉnh sửa">
+                                                        <i class="fas fa-edit"></i>
+                                                    </a>
+                                                @endif
+                                                
+                                                @if(auth()->user()->hasPermission('events.delete'))
+                                                    <button type="button" class="btn btn-sm btn-outline-danger" title="Xóa"
+                                                        onclick="deleteEvent({{ $event->id }}, '{{ $event->name }}')">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                @endif
+                                            @endauth
                                         </div>
                                     </td>
                                 </tr>
@@ -230,9 +228,13 @@
                             <i class="fas fa-times me-2"></i>Xóa bộ lọc
                         </a>
                     @endif
-                    <a href="{{ route('events.create') }}" class="btn btn-primary">
-                        <i class="fas fa-plus me-2"></i>Tạo sự kiện mới
-                    </a>
+                    @auth
+                        @if(auth()->user()->hasPermission('events.create'))
+                            <a href="{{ route('events.create') }}" class="btn btn-primary">
+                                <i class="fas fa-plus me-2"></i>Tạo sự kiện mới
+                            </a>
+                        @endif
+                    @endauth
                 </div>
             @endif
         </div>

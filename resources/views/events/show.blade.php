@@ -5,6 +5,9 @@
 
 @section('page-actions')
     <div class="btn-group" role="group">
+        <a href="{{ route('events.images.index', $event) }}" class="btn btn-info">
+            <i class="fas fa-images me-2"></i>Quản lý ảnh
+        </a>
         <a href="{{ route('events.edit', $event->id) }}" class="btn btn-warning">
             <i class="fas fa-edit me-2"></i>Chỉnh sửa
         </a>
@@ -127,28 +130,28 @@
             </div>
         </div>
         
-        <!-- Ngân sách -->
+        <!-- Ảnh sự kiện -->
         <div class="card shadow">
             <div class="card-body text-center">
-                <h6 class="text-muted mb-3">Tổng quan ngân sách</h6>
-                @php
-                    $totalBudget = $event->budgets->sum('estimated_cost');
-                    $totalSpent = $event->budgets->sum('actual_cost');
-                    $remaining = $totalBudget - $totalSpent;
-                @endphp
+                <h6 class="text-muted mb-3">Ảnh sự kiện</h6>
                 <div class="row text-center">
                     <div class="col-12 mb-2">
-                        <h5 class="text-primary mb-0">{{ number_format($totalBudget, 0, ',', '.') }} VNĐ</h5>
-                        <small class="text-muted">Tổng ngân sách</small>
+                        <h5 class="text-primary mb-0">{{ $event->total_images }}</h5>
+                        <small class="text-muted">Tổng số ảnh</small>
                     </div>
                     <div class="col-6">
-                        <h6 class="text-danger mb-0">{{ number_format($totalSpent, 0, ',', '.') }}</h6>
-                        <small class="text-muted">Đã chi</small>
+                        <h6 class="text-success mb-0">{{ $event->total_nghiem_thu_images }}</h6>
+                        <small class="text-muted">Nghiệm thu</small>
                     </div>
                     <div class="col-6">
-                        <h6 class="text-success mb-0">{{ number_format($remaining, 0, ',', '.') }}</h6>
-                        <small class="text-muted">Còn lại</small>
+                        <h6 class="text-info mb-0">{{ $event->total_thiet_ke_images }}</h6>
+                        <small class="text-muted">Thiết kế</small>
                     </div>
+                </div>
+                <div class="mt-3">
+                    <a href="{{ route('events.images.index', $event) }}" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-images me-1"></i> Xem tất cả ảnh
+                    </a>
                 </div>
             </div>
         </div>
@@ -160,27 +163,15 @@
     <div class="card-header">
         <ul class="nav nav-tabs card-header-tabs" id="eventTabs" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="timeline-tab" data-bs-toggle="tab" 
-                        data-bs-target="#timeline" type="button" role="tab">
-                    <i class="fas fa-clock me-2"></i>Timeline
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="budget-tab" data-bs-toggle="tab" 
-                        data-bs-target="#budget" type="button" role="tab">
-                    <i class="fas fa-dollar-sign me-2"></i>Ngân sách
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="checklist-tab" data-bs-toggle="tab" 
+                <button class="nav-link active" id="checklist-tab" data-bs-toggle="tab" 
                         data-bs-target="#checklist" type="button" role="tab">
                     <i class="fas fa-check-square me-2"></i>Checklist
                 </button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="suppliers-tab" data-bs-toggle="tab" 
-                        data-bs-target="#suppliers" type="button" role="tab">
-                    <i class="fas fa-truck me-2"></i>Nhà cung cấp
+                <button class="nav-link" id="images-tab" data-bs-toggle="tab" 
+                        data-bs-target="#images" type="button" role="tab">
+                    <i class="fas fa-images me-2"></i>Ảnh sự kiện
                 </button>
             </li>
             <li class="nav-item" role="presentation">
@@ -194,129 +185,8 @@
     
     <div class="card-body">
         <div class="tab-content" id="eventTabsContent">
-            <!-- Timeline Tab -->
-            <div class="tab-pane fade show active" id="timeline" role="tabpanel">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h6 class="mb-0">Timeline sự kiện</h6>
-                    <a href="{{ route('events.timelines.create', $event->id) }}" class="btn btn-sm btn-primary">
-                        <i class="fas fa-plus me-1"></i>Thêm mốc thời gian
-                    </a>
-                </div>
-                
-                @if($event->timelines->count() > 0)
-                    <div class="timeline">
-                        @foreach($event->timelines->sortBy('start_time') as $timeline)
-                            <div class="timeline-item mb-3">
-                                <div class="row">
-                                    <div class="col-md-3">
-                                        <div class="text-center">
-                                            <div class="bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
-                                                <i class="fas fa-clock"></i>
-                                            </div>
-                                            <div class="mt-2">
-                                                <strong>{{ $timeline->start_time ? $timeline->start_time->format('H:i') : 'N/A' }}</strong><br>
-                                                <small class="text-muted">{{ $timeline->start_time ? $timeline->start_time->format('d/m/Y') : 'N/A' }}</small>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-9">
-                                        <div class="card border-left-primary">
-                                            <div class="card-body py-2">
-                                                <h6 class="mb-1">{{ $timeline->title }}</h6>
-                                                <p class="text-muted mb-1">{{ $timeline->description }}</p>
-                                                @if($timeline->end_time)
-                                                    <small class="text-muted">
-                                                        <i class="fas fa-arrow-right me-1"></i>
-                                                        Kết thúc: {{ $timeline->end_time->format('H:i d/m/Y') }}
-                                                    </small>
-                                                @endif
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        @endforeach
-                    </div>
-                @else
-                    <div class="text-center py-4">
-                        <i class="fas fa-clock fa-3x text-muted mb-3"></i>
-                        <p class="text-muted">Chưa có timeline nào</p>
-                        <a href="{{ route('events.timelines.create', $event->id) }}" class="btn btn-primary">
-                            <i class="fas fa-plus me-2"></i>Tạo timeline đầu tiên
-                        </a>
-                    </div>
-                @endif
-            </div>
-            
-            <!-- Budget Tab -->
-            <div class="tab-pane fade" id="budget" role="tabpanel">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h6 class="mb-0">Ngân sách chi tiết</h6>
-                    <a href="{{ route('events.budgets.create', $event->id) }}" class="btn btn-sm btn-primary">
-                        <i class="fas fa-plus me-1"></i>Thêm khoản ngân sách
-                    </a>
-                </div>
-                
-                @if($event->budgets->count() > 0)
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Danh mục</th>
-                                    <th>Mô tả</th>
-                                    <th class="text-end">Ngân sách</th>
-                                    <th class="text-end">Đã chi</th>
-                                    <th class="text-end">Còn lại</th>
-                                    <th class="text-center">Thao tác</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach($event->budgets as $budget)
-                                    @php
-                                        $remaining = $budget->estimated_cost - $budget->actual_cost;
-                                        $percentage = $budget->estimated_cost > 0 ? ($budget->actual_cost / $budget->estimated_cost) * 100 : 0;
-                                    @endphp
-                                    <tr>
-                                        <td>
-                                            <span class="badge bg-secondary">{{ $budget->category_display }}</span>
-                                        </td>
-                                        <td>{{ $budget->item_name }}</td> {{-- Assuming item_name is the correct field for description in this context --}}
-                                        <td class="text-end">{{ number_format($budget->estimated_cost, 0, ',', '.') }} VNĐ</td>
-                                        <td class="text-end">
-                                            <span class="{{ $percentage > 100 ? 'text-danger' : 'text-primary' }}">
-                                                {{ number_format($budget->actual_cost, 0, ',', '.') }} VNĐ
-                                            </span>
-                                        </td>
-                                        <td class="text-end">
-                                            <span class="{{ $remaining < 0 ? 'text-danger' : 'text-success' }}">
-                                                {{ number_format($remaining, 0, ',', '.') }} VNĐ
-                                            </span>
-                                        </td>
-                                        <td class="text-center">
-                                            <div class="btn-group btn-group-sm">
-                                                <a href="{{ route('budgets.edit', $budget->id) }}" class="btn btn-outline-warning">
-                                                    <i class="fas fa-edit"></i>
-                                                </a>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-                @else
-                    <div class="text-center py-4">
-                        <i class="fas fa-dollar-sign fa-3x text-muted mb-3"></i>
-                        <p class="text-muted">Chưa có ngân sách nào</p>
-                        <a href="{{ route('events.budgets.create', $event->id) }}" class="btn btn-primary">
-                            <i class="fas fa-plus me-2"></i>Tạo ngân sách đầu tiên
-                        </a>
-                    </div>
-                @endif
-            </div>
-            
             <!-- Checklist Tab -->
-            <div class="tab-pane fade" id="checklist" role="tabpanel">
+            <div class="tab-pane fade show active" id="checklist" role="tabpanel">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h6 class="mb-0">Danh sách công việc</h6>
                     <a href="{{ route('events.checklists.create', $event->id) }}" class="btn btn-sm btn-primary">
@@ -398,58 +268,99 @@
                 @endif
             </div>
             
-            <!-- Suppliers Tab -->
-            <div class="tab-pane fade" id="suppliers" role="tabpanel">
+            <!-- Images Tab -->
+            <div class="tab-pane fade" id="images" role="tabpanel">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h6 class="mb-0">Nhà cung cấp</h6>
-                    <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addSupplierModal">
-                        <i class="fas fa-plus me-1"></i>Thêm nhà cung cấp
-                    </button>
+                    <h6 class="mb-0">Ảnh sự kiện</h6>
+                    <a href="{{ route('events.images.index', $event) }}" class="btn btn-sm btn-primary">
+                        <i class="fas fa-images me-1"></i>Quản lý ảnh
+                    </a>
                 </div>
                 
-                @if($event->suppliers->count() > 0)
+                @if($event->images->count() > 0)
                     <div class="row">
-                        @foreach($event->suppliers as $supplier)
-                            <div class="col-md-6 mb-3">
-                                <div class="card">
-                                    <div class="card-body">
-                                        <div class="d-flex justify-content-between align-items-start">
-                                            <div>
-                                                <h6 class="mb-1">{{ $supplier->name }}</h6>
-                                                <p class="text-muted mb-1">{{ $supplier->service_type }}</p>
-                                                @if($supplier->pivot->role)
-                                                    <span class="badge bg-info">{{ $supplier->pivot->role }}</span>
-                                                @endif
-                                            </div>
-                                            <div class="text-end">
-                                                @if($supplier->pivot->contract_value)
-                                                    <strong>{{ number_format($supplier->pivot->contract_value, 0, ',', '.') }} VNĐ</strong>
-                                                @endif
-                                            </div>
+                        <div class="col-md-6">
+                            <div class="card border-success">
+                                <div class="card-header bg-success text-white">
+                                    <h6 class="mb-0"><i class="fas fa-check-circle me-2"></i>Ảnh Nghiệm Thu</h6>
+                                </div>
+                                <div class="card-body">
+                                    @if($event->nghiemThuImages->count() > 0)
+                                        <div class="row g-2">
+                                            @foreach($event->nghiemThuImages->take(6) as $image)
+                                                <div class="col-4">
+                                                    <img src="{{ $image->file_url }}" 
+                                                         alt="{{ $image->original_filename }}" 
+                                                         class="img-fluid rounded"
+                                                         style="width: 100%; height: 80px; object-fit: cover;">
+                                                </div>
+                                            @endforeach
                                         </div>
-                                        @if($supplier->contact_person || $supplier->phone)
-                                            <hr class="my-2">
-                                            <div class="small text-muted">
-                                                @if($supplier->contact_person)
-                                                    <div><i class="fas fa-user me-1"></i>{{ $supplier->contact_person }}</div>
-                                                @endif
-                                                @if($supplier->phone)
-                                                    <div><i class="fas fa-phone me-1"></i>{{ $supplier->phone }}</div>
-                                                @endif
+                                        @if($event->nghiemThuImages->count() > 6)
+                                            <div class="text-center mt-2">
+                                                <small class="text-muted">và {{ $event->nghiemThuImages->count() - 6 }} ảnh khác</small>
                                             </div>
                                         @endif
-                                    </div>
+                                    @else
+                                        <div class="text-center py-3">
+                                            <i class="fas fa-images fa-2x text-muted mb-2"></i>
+                                            <p class="text-muted mb-0">Chưa có ảnh nghiệm thu</p>
+                                        </div>
+                                    @endif
                                 </div>
                             </div>
-                        @endforeach
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card border-info">
+                                <div class="card-header bg-info text-white">
+                                    <h6 class="mb-0"><i class="fas fa-palette me-2"></i>Ảnh Thiết Kế</h6>
+                                </div>
+                                <div class="card-body">
+                                    @if($event->thietKeImages->count() > 0)
+                                        <div class="row g-2">
+                                            @foreach($event->thietKeImages->take(6) as $image)
+                                                <div class="col-4">
+                                                    <img src="{{ $image->file_url }}" 
+                                                         alt="{{ $image->original_filename }}" 
+                                                         class="img-fluid rounded"
+                                                         style="width: 100%; height: 80px; object-fit: cover;">
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                        @if($event->thietKeImages->count() > 6)
+                                            <div class="text-center mt-2">
+                                                <small class="text-muted">và {{ $event->thietKeImages->count() - 6 }} ảnh khác</small>
+                                            </div>
+                                        @endif
+                                    @else
+                                        <div class="text-center py-3">
+                                            <i class="fas fa-images fa-2x text-muted mb-2"></i>
+                                            <p class="text-muted mb-0">Chưa có ảnh thiết kế</p>
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-center mt-3">
+                        <a href="{{ route('events.images.index', $event) }}" class="btn btn-outline-primary">
+                            <i class="fas fa-eye me-1"></i>Xem tất cả ảnh ({{ $event->total_images }})
+                        </a>
+                        @if($event->images->count() > 0)
+                            <a href="{{ route('events.images.download-zip', $event) }}" class="btn btn-outline-success">
+                                <i class="fas fa-download me-1"></i>Tải ZIP
+                            </a>
+                        @endif
                     </div>
                 @else
                     <div class="text-center py-4">
-                        <i class="fas fa-truck fa-3x text-muted mb-3"></i>
-                        <p class="text-muted">Chưa có nhà cung cấp nào</p>
-                        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addSupplierModal">
-                            <i class="fas fa-plus me-2"></i>Thêm nhà cung cấp đầu tiên
-                        </button>
+                        <i class="fas fa-images fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">Chưa có ảnh nào</p>
+                        <a href="{{ route('events.images.index', $event) }}" class="btn btn-primary">
+                            <i class="fas fa-plus me-2"></i>Thêm ảnh đầu tiên
+                        </a>
                     </div>
                 @endif
             </div>

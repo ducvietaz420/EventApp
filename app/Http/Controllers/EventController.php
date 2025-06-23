@@ -3,17 +3,21 @@
 namespace App\Http\Controllers;
 
 use App\Models\Event;
-use App\Models\Timeline;
-use App\Models\Supplier;
+use App\Models\EventImage;
 use App\Models\Checklist;
 use App\Models\AiSuggestion;
-use App\Models\EventReport;
-use App\Models\Budget;
+
+use App\Exports\EventsExport;
+use App\Exports\EventDetailExport;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Http\UploadedFile;
+use Maatwebsite\Excel\Facades\Excel;
+use ZipArchive;
 
 /**
  * Controller quản lý sự kiện
@@ -22,11 +26,18 @@ use Illuminate\Validation\Rule;
 class EventController extends Controller
 {
     /**
+     * Constructor - Yêu cầu authentication cho tất cả routes
+     */
+    public function __construct()
+    {
+        $this->middleware(['auth', 'check.user.status']);
+    }
+    /**
      * Hiển thị danh sách tất cả sự kiện
      */
     public function index(Request $request): View|JsonResponse
     {
-        $query = Event::with(['budgets', 'timelines', 'checklists']);
+        $query = Event::with(['images', 'checklists']);
         
         // Lọc theo trạng thái nếu có
         if ($request->has('status') && $request->status) {
@@ -117,11 +128,14 @@ class EventController extends Controller
     public function show(Event $event): View|JsonResponse
     {
         $event->load([
-            'budgets' => function($query) {
+            'images' => function($query) {
                 $query->orderBy('created_at', 'desc');
             },
-            'timelines' => function($query) {
-                $query->orderBy('start_time', 'asc');
+            'nghiemThuImages' => function($query) {
+                $query->orderBy('created_at', 'desc');
+            },
+            'thietKeImages' => function($query) {
+                $query->orderBy('created_at', 'desc');
             },
             'checklists' => function($query) {
                 $query->orderBy('due_date', 'asc');
@@ -129,8 +143,7 @@ class EventController extends Controller
             'aiSuggestions' => function($query) {
                 $query->where('status', '!=', 'rejected')
                       ->orderBy('created_at', 'desc');
-            },
-            'reports'
+            }
         ]);
         
         if (request()->expectsJson()) {
@@ -249,17 +262,10 @@ class EventController extends Controller
         $planningEvents = Event::where('status', 'planning')->count();
         $upcomingEvents = Event::where('event_date', '>', now())->count();
         
-        // Thống kê Timeline
-        $totalTimelines = Timeline::count();
-        $completedTimelines = Timeline::where('status', 'completed')->count();
-        $overdueTimelinesCount = Timeline::overdue()->count();
-        $upcomingTimelines = Timeline::upcoming()->limit(5)->get();
-        
-        // Thống kê Suppliers
-        $totalSuppliers = Supplier::count();
-        $verifiedSuppliers = Supplier::verified()->count();
-        $preferredSuppliers = Supplier::preferred()->count();
-        $availableSuppliers = Supplier::where('status', 'active')->count();
+        // Thống kê Ảnh
+        $totalImages = EventImage::count();
+        $nghiemThuImages = EventImage::nghiemThu()->count();
+        $thietKeImages = EventImage::thietKe()->count();
         
         // Thống kê Checklist
         $totalChecklists = Checklist::count();
@@ -273,42 +279,33 @@ class EventController extends Controller
         $pendingSuggestions = AiSuggestion::pending()->count();
         $highConfidenceSuggestions = AiSuggestion::highConfidence()->count();
         
-        // Thống kê Reports
-        $totalReports = EventReport::count();
-        $publishedReports = EventReport::published()->count();
-        $draftReports = EventReport::drafts()->count();
+
         
         // Lấy dữ liệu cho hiển thị
-        $recentEvents = Event::with(['budgets', 'timelines', 'checklists', 'aiSuggestions', 'reports'])
+        $recentEvents = Event::with(['images', 'checklists', 'aiSuggestions'])
                             ->orderBy('created_at', 'desc')
                             ->limit(5)
                             ->get();
                             
-        $upcomingEventsList = Event::with(['budgets', 'timelines', 'checklists'])
+        $upcomingEventsList = Event::with(['images', 'checklists'])
                             ->where('event_date', '>', now())
                             ->orderBy('event_date', 'asc')
                             ->limit(5)
                             ->get();
         
-        // Tasks cần chú ý - lấy từ Timeline và Checklist thực tế
-        $overdueTimelines = Timeline::overdue()->with('event')->limit(3)->get();
-        $overdueChecklists = Checklist::overdue()->with('event')->limit(3)->get();
+        // Tasks cần chú ý - chỉ lấy từ Checklist
+        $overdueChecklists = Checklist::where('due_date', '<', now())
+                                     ->where('status', '!=', 'completed')
+                                     ->with('event')
+                                     ->limit(10)
+                                     ->get();
         
-        $pendingTasks = collect()
-            ->merge($overdueTimelines->map(function($item) {
-                $item->type = 'timeline';
-                $item->urgency = 'overdue';
-                $item->priority = $item->priority ?? 'medium';
-                return $item;
-            }))
-            ->merge($overdueChecklists->map(function($item) {
-                $item->type = 'checklist';
-                $item->urgency = 'overdue';
-                $item->priority = $item->priority ?? 'medium';
-                return $item;
-            }))
-            ->sortBy('due_date')
-            ->take(10);
+        $pendingTasks = $overdueChecklists->map(function($item) {
+            $item->type = 'checklist';
+            $item->urgency = 'overdue';
+            $item->priority = $item->priority ?? 'medium';
+            return $item;
+        })->sortBy('due_date');
         
         // Gợi ý AI mới nhất
         $recentSuggestions = AiSuggestion::with('event')
@@ -316,11 +313,9 @@ class EventController extends Controller
                                         ->limit(5)
                                         ->get();
         
-        // Thống kê ngân sách thực tế
-        $totalBudgetEstimated = Budget::sum('estimated_cost');
-        $totalBudgetActual = Budget::sum('actual_cost');
-        $totalBudget = $totalBudgetEstimated; // Sử dụng estimated cho hiển thị tổng
-        $budgetVariance = $totalBudgetActual - $totalBudgetEstimated;
+        // Thống kê ảnh theo sự kiện
+        $eventsWithImages = Event::has('images')->count();
+        $averageImagesPerEvent = $totalImages > 0 && $totalEvents > 0 ? round($totalImages / $totalEvents, 1) : 0;
         
         // Dữ liệu thực cho biểu đồ sự kiện theo tháng (12 tháng gần nhất)
         $monthlyData = [];
@@ -375,16 +370,12 @@ class EventController extends Controller
                         'planning' => $planningEvents,
                         'upcoming' => $upcomingEvents,
                     ],
-                    'timelines' => [
-                        'total' => $totalTimelines,
-                        'completed' => $completedTimelines,
-                        'overdue' => $overdueTimelinesCount,
-                    ],
-                    'suppliers' => [
-                        'total' => $totalSuppliers,
-                        'verified' => $verifiedSuppliers,
-                        'preferred' => $preferredSuppliers,
-                        'available' => $availableSuppliers,
+                    'images' => [
+                        'total' => $totalImages,
+                        'nghiem_thu' => $nghiemThuImages,
+                        'thiet_ke' => $thietKeImages,
+                        'events_with_images' => $eventsWithImages,
+                        'average_per_event' => $averageImagesPerEvent,
                     ],
                     'checklists' => [
                         'total' => $totalChecklists,
@@ -398,16 +389,7 @@ class EventController extends Controller
                         'pending' => $pendingSuggestions,
                         'high_confidence' => $highConfidenceSuggestions,
                     ],
-                    'reports' => [
-                        'total' => $totalReports,
-                        'published' => $publishedReports,
-                        'drafts' => $draftReports,
-                    ],
-                    'budget' => [
-                        'estimated' => $totalBudgetEstimated,
-                        'actual' => $totalBudgetActual,
-                        'variance' => $budgetVariance,
-                    ],
+
                     'charts' => [
                         'monthly_labels' => $monthlyLabels,
                         'monthly_data' => $monthlyData,
@@ -426,14 +408,327 @@ class EventController extends Controller
         // Trả về view dashboard với tất cả dữ liệu thực
         return view('dashboard', compact(
             'totalEvents', 'completedEvents', 'activeEvents', 'inProgressEvents', 'planningEvents', 'upcomingEvents',
-            'totalTimelines', 'completedTimelines', 'overdueTimelinesCount', 'upcomingTimelines',
-            'totalSuppliers', 'verifiedSuppliers', 'preferredSuppliers', 'availableSuppliers',
+            'totalImages', 'nghiemThuImages', 'thietKeImages', 'eventsWithImages', 'averageImagesPerEvent',
             'totalChecklists', 'completedChecklists', 'pendingChecklists', 'overdueChecklists',
             'totalSuggestions', 'acceptedSuggestions', 'pendingSuggestions', 'highConfidenceSuggestions',
-            'totalReports', 'publishedReports', 'draftReports',
-            'totalBudgetEstimated', 'totalBudgetActual', 'totalBudget', 'budgetVariance',
             'recentEvents', 'upcomingEventsList', 'pendingTasks', 'recentSuggestions',
             'monthlyLabels', 'monthlyData', 'typeLabels', 'typeData'
         ));
+    }
+
+    /**
+     * Xuất danh sách sự kiện ra file Excel
+     */
+    public function exportEvents(Request $request)
+    {
+        $startDate = $request->get('start_date');
+        $endDate = $request->get('end_date');
+        $status = $request->get('status');
+
+        $filename = 'danh-sach-su-kien-' . now()->format('Y-m-d-H-i-s') . '.xlsx';
+
+        return Excel::download(
+            new EventsExport($startDate, $endDate, $status),
+            $filename
+        );
+    }
+
+    /**
+     * Xuất báo cáo chi tiết sự kiện ra file Excel
+     */
+    public function exportEventDetail(Event $event)
+    {
+        $filename = 'bao-cao-su-kien-' . $event->id . '-' . now()->format('Y-m-d-H-i-s') . '.xlsx';
+
+        return Excel::download(
+            new EventDetailExport($event),
+            $filename
+        );
+    }
+
+    /**
+     * Hiển thị trang quản lý ảnh cho sự kiện
+     */
+    public function imagesIndex(Event $event): View
+    {
+        // Load tất cả các relationship cần thiết
+        $event->load(['images', 'nghiemThuImages', 'thietKeImages']);
+        
+        return view('events.images.index', compact('event'));
+    }
+
+    /**
+     * Upload ảnh cho sự kiện
+     */
+    public function uploadImages(Request $request, Event $event): RedirectResponse|JsonResponse
+    {
+        // Custom validation dựa trên loại file
+        $imageType = $request->input('image_type');
+        
+        if ($imageType === 'nghiem_thu') {
+            // Ảnh nghiệm thu - chỉ chấp nhận file ảnh
+            $request->validate([
+                'images' => 'required|array|min:1',
+                'images.*' => 'required|file|mimes:jpeg,png,jpg,gif,bmp,tiff|max:10240', // 10MB
+                'image_type' => 'required|in:nghiem_thu,thiet_ke',
+                'category' => 'nullable|string|max:100',
+                'description' => 'nullable|string|max:500'
+            ]);
+        } else {
+            // File thiết kế - chấp nhận cả ảnh và file thiết kế
+            $request->validate([
+                'images' => 'required|array|min:1',
+                'images.*' => 'required|file|mimes:jpeg,png,jpg,gif,bmp,tiff,ai,psd,eps,svg,pdf|max:51200', // 50MB
+                'image_type' => 'required|in:nghiem_thu,thiet_ke',
+                'category' => 'nullable|string|max:100',
+                'description' => 'nullable|string|max:500'
+            ]);
+        }
+
+        $uploadedImages = [];
+        
+        foreach ($request->file('images') as $file) {
+            // Kiểm tra kích thước file dựa trên loại
+            $maxFileSize = $imageType === 'nghiem_thu' ? 10 * 1024 * 1024 : 50 * 1024 * 1024; // 10MB cho ảnh, 50MB cho thiết kế
+            
+            if ($file->getSize() > $maxFileSize) {
+                $maxSizeMB = $maxFileSize / 1024 / 1024;
+                return redirect()->back()
+                    ->withErrors(['images' => "File {$file->getClientOriginalName()} có kích thước vượt quá {$maxSizeMB}MB"])
+                    ->withInput();
+            }
+            
+            $uploadedImage = $this->storeImage(
+                $file, 
+                $event, 
+                $request->input('image_type'), 
+                $request->input('category'),
+                $request->input('description')
+            );
+            $uploadedImages[] = $uploadedImage;
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'data' => $uploadedImages,
+                'message' => 'File đã được upload thành công!'
+            ]);
+        }
+
+        $fileCount = count($uploadedImages);
+        $message = $imageType === 'nghiem_thu' 
+            ? "Đã upload {$fileCount} ảnh nghiệm thu thành công!" 
+            : "Đã upload {$fileCount} file thiết kế thành công!";
+
+        return redirect()->route('events.images.index', $event)
+                        ->with('success', $message);
+    }
+
+    /**
+     * Xóa ảnh
+     */
+    public function deleteImage(Event $event, EventImage $image): RedirectResponse|JsonResponse
+    {
+        if ($image->event_id !== $event->id) {
+            abort(404);
+        }
+
+        // Xóa file khỏi storage
+        if (Storage::disk('public')->exists($image->file_path)) {
+            Storage::disk('public')->delete($image->file_path);
+        }
+
+        // Xóa record khỏi database
+        $image->delete();
+
+        if (request()->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Ảnh đã được xóa thành công!'
+            ]);
+        }
+
+        return redirect()->route('events.images.index', $event)
+                        ->with('success', 'Ảnh đã được xóa thành công!');
+    }
+
+    /**
+     * Download tất cả ảnh của sự kiện dưới dạng file ZIP
+     */
+    public function downloadImagesZip(Event $event)
+    {
+        $images = $event->images;
+        
+        if ($images->isEmpty()) {
+            return redirect()->back()->with('error', 'Sự kiện này chưa có ảnh nào!');
+        }
+
+        // Tạo tên file ZIP
+        $zipFileName = $this->sanitizeFileName($event->name) . '-' . now()->format('Y-m-d-H-i-s') . '.zip';
+        $zipPath = storage_path('app/temp/' . $zipFileName);
+        
+        // Tạo thư mục temp nếu chưa có
+        if (!file_exists(storage_path('app/temp'))) {
+            mkdir(storage_path('app/temp'), 0755, true);
+        }
+
+        $zip = new ZipArchive;
+        if ($zip->open($zipPath, ZipArchive::CREATE) === TRUE) {
+            // Tạo cấu trúc thư mục: Tên sự kiện -> Tên khách hàng -> Ngày sự kiện
+            $eventName = $this->sanitizeFileName($event->name);
+            $clientName = $this->sanitizeFileName($event->client_name ?: 'Khach-hang');
+            $eventDate = $event->event_date ? $event->event_date->format('d-m-Y') : 'Chua-xac-dinh';
+            
+            $basePath = $eventName . '/' . $clientName . '/' . $eventDate;
+            
+            // Tạo thư mục con trong ZIP
+            $zip->addEmptyDir($basePath . '/Thiet-ke');
+            $zip->addEmptyDir($basePath . '/Nghiem-thu');
+
+            foreach ($images as $image) {
+                $filePath = storage_path('app/public/' . $image->file_path);
+                
+                if (file_exists($filePath)) {
+                    if ($image->image_type === 'nghiem_thu') {
+                        $folderPath = $basePath . '/Nghiem-thu';
+                    } else {
+                        // Ảnh thiết kế - tạo thư mục con theo category
+                        $folderPath = $basePath . '/Thiet-ke';
+                        if ($image->category) {
+                            $categoryName = $this->getCategoryDisplayName($image->category);
+                            $folderPath .= '/' . $categoryName;
+                            // Tạo thư mục category nếu chưa có
+                            $zip->addEmptyDir($folderPath);
+                        }
+                    }
+                    
+                    $zipFilePath = $folderPath . '/' . $this->sanitizeFileName($image->original_filename);
+                    $zip->addFile($filePath, $zipFilePath);
+                }
+            }
+            
+            $zip->close();
+
+            // Download file và xóa file tạm
+            return response()->download($zipPath)->deleteFileAfterSend(true);
+        }
+
+        return redirect()->back()->with('error', 'Không thể tạo file ZIP!');
+    }
+
+    /**
+     * Lưu ảnh vào storage và database
+     */
+    private function storeImage(UploadedFile $file, Event $event, string $imageType, ?string $category = null, ?string $description = null): EventImage
+    {
+        $originalName = $file->getClientOriginalName();
+        $extension = $file->getClientOriginalExtension();
+        $filename = time() . '_' . uniqid() . '.' . $extension;
+        
+        // Lưu file vào storage/app/public/events/{event_id}/{image_type}/
+        $directory = "events/{$event->id}/{$imageType}";
+        $filePath = $file->storeAs($directory, $filename, 'public');
+        
+        // Tạo record trong database
+        return EventImage::create([
+            'event_id' => $event->id,
+            'filename' => $filename,
+            'original_filename' => $originalName,
+            'file_path' => $filePath,
+            'file_size' => $file->getSize(),
+            'mime_type' => $file->getMimeType(),
+            'image_type' => $imageType,
+            'category' => $category,
+            'description' => $description
+        ]);
+    }
+
+    /**
+     * Làm sạch tên file để sử dụng trong ZIP - hỗ trợ tiếng Việt
+     */
+    private function sanitizeFileName(string $filename): string
+    {
+        // Bước 1: Sử dụng transliterator để chuyển đổi ký tự có dấu thành không dấu
+        if (class_exists('Transliterator')) {
+            $transliterator = \Transliterator::create('Any-Latin; Latin-ASCII; [\u0080-\u7fff] remove');
+            if ($transliterator) {
+                $filename = $transliterator->transliterate($filename);
+            }
+        } else {
+            // Fallback: Manual mapping cho tiếng Việt
+            $vietnamese = [
+                'à', 'á', 'ạ', 'ả', 'ã', 'â', 'ầ', 'ấ', 'ậ', 'ẩ', 'ẫ', 'ă', 'ằ', 'ắ', 'ặ', 'ẳ', 'ẵ',
+                'è', 'é', 'ẹ', 'ẻ', 'ẽ', 'ê', 'ề', 'ế', 'ệ', 'ể', 'ễ',
+                'ì', 'í', 'ị', 'ỉ', 'ĩ',
+                'ò', 'ó', 'ọ', 'ỏ', 'õ', 'ô', 'ồ', 'ố', 'ộ', 'ổ', 'ỗ', 'ơ', 'ờ', 'ớ', 'ợ', 'ở', 'ỡ',
+                'ù', 'ú', 'ụ', 'ủ', 'ũ', 'ư', 'ừ', 'ứ', 'ự', 'ử', 'ữ',
+                'ỳ', 'ý', 'ỵ', 'ỷ', 'ỹ',
+                'đ',
+                'À', 'Á', 'Ạ', 'Ả', 'Ã', 'Â', 'Ầ', 'Ấ', 'Ậ', 'Ẩ', 'Ẫ', 'Ă', 'Ằ', 'Ắ', 'Ặ', 'Ẳ', 'Ẵ',
+                'È', 'É', 'Ẹ', 'Ẻ', 'Ẽ', 'Ê', 'Ề', 'Ế', 'Ệ', 'Ể', 'Ễ',
+                'Ì', 'Í', 'Ị', 'Ỉ', 'Ĩ',
+                'Ò', 'Ó', 'Ọ', 'Ỏ', 'Õ', 'Ô', 'Ồ', 'Ố', 'Ộ', 'Ổ', 'Ỗ', 'Ơ', 'Ờ', 'Ớ', 'Ợ', 'Ở', 'Ỡ',
+                'Ù', 'Ú', 'Ụ', 'Ủ', 'Ũ', 'Ư', 'Ừ', 'Ứ', 'Ự', 'Ử', 'Ữ',
+                'Ỳ', 'Ý', 'Ỵ', 'Ỷ', 'Ỹ',
+                'Đ'
+            ];
+            
+            $latin = [
+                'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a',
+                'e', 'e', 'e', 'e', 'e', 'e', 'e', 'e', 'e', 'e', 'e',
+                'i', 'i', 'i', 'i', 'i',
+                'o', 'o', 'o', 'o', 'o', 'o', 'o', 'o', 'o', 'o', 'o', 'o', 'o', 'o', 'o', 'o', 'o',
+                'u', 'u', 'u', 'u', 'u', 'u', 'u', 'u', 'u', 'u', 'u',
+                'y', 'y', 'y', 'y', 'y',
+                'd',
+                'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A',
+                'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E', 'E',
+                'I', 'I', 'I', 'I', 'I',
+                'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O', 'O',
+                'U', 'U', 'U', 'U', 'U', 'U', 'U', 'U', 'U', 'U', 'U',
+                'Y', 'Y', 'Y', 'Y', 'Y',
+                'D'
+            ];
+            
+            $filename = str_replace($vietnamese, $latin, $filename);
+        }
+        
+        // Bước 2: Loại bỏ các ký tự đặc biệt (giữ lại chữ cái, số, dấu cách, gạch ngang, gạch dưới, dấu chấm)
+        $filename = preg_replace('/[^a-zA-Z0-9\s\-_.]/', '', $filename);
+        
+        // Bước 3: Thay thế nhiều dấu cách liên tiếp thành một dấu gạch ngang
+        $filename = preg_replace('/\s+/', '-', $filename);
+        
+        // Bước 4: Loại bỏ dấu gạch ngang ở đầu và cuối
+        $filename = trim($filename, '-');
+        
+        // Bước 5: Giới hạn độ dài tên file (tối đa 100 ký tự)
+        if (strlen($filename) > 100) {
+            $filename = substr($filename, 0, 100);
+            $filename = rtrim($filename, '-');
+        }
+        
+        // Bước 6: Nếu tên file rỗng, trả về 'unknown'
+        return $filename ?: 'unknown';
+    }
+
+    /**
+     * Lấy tên hiển thị cho category
+     */
+    private function getCategoryDisplayName(string $category): string
+    {
+        $categoryMap = [
+            'backdrop' => 'Backdrop',
+            'led' => 'LED',
+            'san-khau' => 'San-khau',
+            'standee' => 'Standee',
+            'trang-tri' => 'Trang-tri',
+            'am-thanh' => 'Am-thanh',
+            'anh-sang' => 'Anh-sang',
+            'khac' => 'Khac'
+        ];
+
+        return $categoryMap[$category] ?? ucfirst($this->sanitizeFileName($category));
     }
 }

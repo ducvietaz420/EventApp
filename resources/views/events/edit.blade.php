@@ -275,23 +275,7 @@
 
             <!-- Thống kê nhanh -->
             <div class="row mt-4">
-                <div class="col-md-3">
-                    <div class="card text-center">
-                        <div class="card-body">
-                            <h5 class="text-primary">{{ $event->budgets->count() }}</h5>
-                            <small class="text-muted">Khoản ngân sách</small>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card text-center">
-                        <div class="card-body">
-                            <h5 class="text-info">{{ $event->timelines->count() }}</h5>
-                            <small class="text-muted">Mốc thời gian</small>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
+                <div class="col-md-6">
                     <div class="card text-center">
                         <div class="card-body">
                             <h5 class="text-warning">{{ $event->checklists->count() }}</h5>
@@ -299,7 +283,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-6">
                     <div class="card text-center">
                         <div class="card-body">
                             <h5 class="text-success">{{ $event->suppliers->count() }}</h5>

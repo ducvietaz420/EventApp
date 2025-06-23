@@ -4,13 +4,22 @@ namespace App\Http\Controllers;
 
 use App\Models\Checklist;
 use App\Models\Event;
+use App\Exports\ChecklistsExport;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
 
 class ChecklistController extends Controller
 {
+    /**
+     * Constructor - Yêu cầu authentication
+     */
+    public function __construct()
+    {
+        $this->middleware(['auth', 'check.user.status']);
+    }
     /**
      * Display a listing of the resource.
      */
@@ -291,5 +300,23 @@ class ChecklistController extends Controller
         
         return redirect()->route('checklists.edit', $newChecklist)
                          ->with('success', 'Checklist đã được sao chép thành công!');
+    }
+
+    /**
+     * Xuất danh sách checklist ra file Excel
+     */
+    public function exportChecklists(Request $request)
+    {
+        $eventId = $request->get('event_id');
+        $status = $request->get('status');
+        $category = $request->get('category');
+        $priority = $request->get('priority');
+
+        $filename = 'danh-sach-checklist-' . now()->format('Y-m-d-H-i-s') . '.xlsx';
+
+        return Excel::download(
+            new ChecklistsExport($eventId, $status, $category, $priority),
+            $filename
+        );
     }
 }

@@ -5,12 +5,11 @@ namespace Database\Seeders;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use App\Models\Event;
-use App\Models\Budget;
-use App\Models\Timeline;
+
 use App\Models\Supplier;
 use App\Models\Checklist;
 use App\Models\AiSuggestion;
-use App\Models\EventReport;
+
 use Carbon\Carbon;
 
 class EventSeeder extends Seeder
@@ -146,109 +145,10 @@ class EventSeeder extends Seeder
         foreach ($events as $eventData) {
             $event = Event::create($eventData);
             
-            // Tạo budget cho từng sự kiện
-            $budgetItems = [
-                [
-                    'category' => 'venue',
-                    'item_name' => 'Thuê địa điểm',
-                    'description' => 'Chi phí thuê địa điểm tổ chức sự kiện',
-                    'estimated_cost' => $event->budget * 0.3,
-                    'actual_cost' => $event->budget * 0.28,
-                    'status' => 'paid',
-                    'is_essential' => true,
-                    'priority' => 1,
-                    'due_date' => Carbon::now()->addDays(20)->toDateString(),
-                    'paid_date' => Carbon::now()->subDays(5)->toDateString(),
-                    'supplier_name' => 'Khách sạn Grand Palace',
-                    'supplier_contact' => '0901234567'
-                ],
-                [
-                    'category' => 'catering',
-                    'item_name' => 'Dịch vụ ăn uống',
-                    'description' => 'Dịch vụ catering cho sự kiện',
-                    'estimated_cost' => $event->budget * 0.4,
-                    'actual_cost' => $event->budget * 0.42,
-                    'status' => 'booked',
-                    'is_essential' => true,
-                    'priority' => 2,
-                    'due_date' => Carbon::now()->addDays(25)->toDateString(),
-                    'supplier_name' => 'Nhà hàng ABC',
-                    'supplier_contact' => '0902345678'
-                ],
-                [
-                     'category' => 'decoration',
-                     'item_name' => 'Trang trí',
-                     'description' => 'Trang trí hoa và backdrop cho sự kiện',
-                     'estimated_cost' => $event->budget * 0.2,
-                     'actual_cost' => 0,
-                     'status' => 'quoted',
-                     'is_essential' => false,
-                     'priority' => 3,
-                     'due_date' => Carbon::now()->addDays(28)->toDateString(),
-                     'supplier_name' => 'Cửa hàng hoa XYZ',
-                     'supplier_contact' => '0903456789'
-                 ],
-                 [
-                     'category' => 'entertainment',
-                     'item_name' => 'Âm thanh ánh sáng',
-                     'description' => 'Dịch vụ âm nhạc và giải trí',
-                     'estimated_cost' => $event->budget * 0.1,
-                     'actual_cost' => 0,
-                     'status' => 'planned',
-                     'is_essential' => false,
-                     'priority' => 4,
-                     'due_date' => Carbon::now()->addDays(30)->toDateString(),
-                     'supplier_name' => 'Ban nhạc DEF',
-                     'supplier_contact' => '0904567890'
-                 ]
-            ];
-
-            foreach ($budgetItems as $budgetData) {
-                $budgetData['event_id'] = $event->id;
-                Budget::create($budgetData);
-            }
-
-            // Tạo timeline cho mỗi sự kiện
-            $eventDate = Carbon::parse($event->event_date);
-            $timelineItems = [
-                [
-                    'title' => 'Khảo sát địa điểm',
-                    'description' => 'Đi khảo sát và chọn địa điểm tổ chức sự kiện',
-                    'start_time' => $eventDate->copy()->subDays(30)->toDateTimeString(),
-                    'end_time' => $eventDate->copy()->subDays(28)->toDateTimeString(),
-                    'status' => 'completed',
-                    'priority' => 'high',
-                    'is_milestone' => true,
-                    'responsible_person' => 'Nguyễn Văn A'
-                ],
-                [
-                    'title' => 'Thiết kế backdrop',
-                    'description' => 'Thiết kế và sản xuất backdrop chính cho sự kiện',
-                    'start_time' => $eventDate->copy()->subDays(25)->toDateTimeString(),
-                    'end_time' => $eventDate->copy()->subDays(20)->toDateTimeString(),
-                    'status' => $event->status === 'planning' ? 'pending' : 'in_progress',
-                    'priority' => 'medium',
-                    'is_milestone' => false,
-                    'responsible_person' => 'Trần Thị B'
-                ],
-                [
-                    'title' => 'Setup âm thanh',
-                    'description' => 'Lắp đặt và test hệ thống âm thanh',
-                    'start_time' => $eventDate->copy()->subHours(4)->toDateTimeString(),
-                    'end_time' => $eventDate->copy()->subHours(2)->toDateTimeString(),
-                    'status' => 'pending',
-                    'priority' => 'critical',
-                    'is_milestone' => true,
-                    'responsible_person' => 'Lê Văn C'
-                ]
-            ];
-
-            foreach ($timelineItems as $timelineData) {
-                $timelineData['event_id'] = $event->id;
-                Timeline::create($timelineData);
-            }
+            // Chức năng Budget và Timeline đã được xóa
 
             // Tạo checklist cho mỗi sự kiện
+            $eventDate = Carbon::parse($event->event_date);
             $checklistItems = [
                 [
                     'title' => 'Xác nhận địa điểm',
@@ -342,26 +242,6 @@ class EventSeeder extends Seeder
             ]);
         }
 
-        // Tạo báo cáo cho sự kiện đã hoàn thành (nếu có)
-        $completedEvent = Event::where('status', 'completed')->first();
-        if ($completedEvent) {
-            EventReport::create([
-                'event_id' => $completedEvent->id,
-                'report_type' => 'post_event',
-                'title' => 'Báo cáo tổng kết sự kiện ' . $completedEvent->name,
-                'summary' => 'Sự kiện diễn ra thành công với sự tham gia của ' . $completedEvent->actual_attendees . ' khách mời',
-                'content' => 'Báo cáo chi tiết về quá trình tổ chức và kết quả của sự kiện',
-                'status' => 'published',
-                'visibility' => 'public',
-                'rating' => 4.5,
-                'success_score' => 88.5,
-                'roi_percentage' => 15.2,
-                'cost_variance' => 5.5,
-                'timeline_variance' => -2,
-                'stakeholder_satisfaction' => 92.0,
-                'published_at' => now(),
-                'tags' => ['successful', 'on-budget', 'high-satisfaction']
-            ]);
-        }
+        // Báo cáo đã được xóa khỏi hệ thống
     }
 }

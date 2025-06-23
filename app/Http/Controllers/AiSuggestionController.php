@@ -16,6 +16,13 @@ use Illuminate\Support\Facades\Http;
 class AiSuggestionController extends Controller
 {
     /**
+     * Constructor - Yêu cầu authentication
+     */
+    public function __construct()
+    {
+        $this->middleware(['auth', 'check.user.status']);
+    }
+    /**
      * Display a listing of the resource.
      */
     public function index(Request $request, Event $event = null): View
